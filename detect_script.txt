@@ -1,0 +1,1 @@
+python detect.py --weights yolov5x.pt --source data\driving_record.mp4 --device 0 --classes 2 3 4 5 6 7 --augment --imgsz 832 --save-txt --conf-thres 0.6

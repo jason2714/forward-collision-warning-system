@@ -226,7 +226,6 @@ def choose_lines(lines, min_slope_thr, max_slope_thr):  # 過濾斜率幾乎為�
     lines = lines[chosen_indices]
     return lines
 
-
 if __name__ == "__main__":
     input_dir = Path('input')
     output_dir = Path('output')

@@ -5,16 +5,19 @@ from utils.general import print_args
 import cv2 as cv
 from models.common import DetectMultiBackend
 from utils.torch_utils import select_device
-from lane_crop import process_image
+from lane_crop import process_image, line_intersection
 from thread_with_return_value import ThreadWithReturnValue
 import timeit
 from tqdm import trange
+
 
 def parse_opt():
     parser = ArgumentParser()
 
     parser.add_argument('--input_path', type=Path, default='./data/videos/test_video1.mp4', help='path of input video')
     parser.add_argument('--output_dir', type=Path, default='./output/', help='directory of output video')
+    parser.add_argument('--warning_ratio', type=float, default=1 / 36,
+                        help='warning ratio of the car size in the frame')
 
     # options for yolo
     parser.add_argument('--weights', nargs='+', type=str, default='yolov5s.pt', help='model path(s)')
@@ -56,11 +59,43 @@ def parse_opt():
     return opt
 
 
+def point_line_xdiff(point, line):
+    horizon_line = [point[0] - 10, point[1], *point]
+    horizon_cross_point = line_intersection(horizon_line, line)
+    assert horizon_cross_point[1] == point[1], "y of horizon_cross_point must be the same as y of point"
+    return point[0] - horizon_cross_point[0]
+
+
+def is_in_lane(det, left_lane, right_lane):
+    left_bottom_point = [det[0], det[3]]
+    right_bottom_point = det[2:]
+    left_xdiff = point_line_xdiff(left_bottom_point, left_lane)
+    right_xdiff = point_line_xdiff(right_bottom_point, right_lane)
+    if left_xdiff >= 0 and right_xdiff <= 0:
+        return True
+    return False
+
+
+def cal_car_frame_ratio(det, frame_shape):
+    if len(frame_shape) == 3:
+        frame_shape = frame_shape[:2]
+    det_size = (det[2] - det[0]) * (det[3] - det[1])
+    frame_size = frame_shape[0] * frame_shape[1]
+    return det_size / frame_size
+
+
 def main():
     opt = parse_opt()
+    opt.output_dir.mkdir(parents=True, exist_ok=True)
     model = DetectMultiBackend(opt.weights, device=opt.device, dnn=opt.dnn, data=opt.data, fp16=opt.half)
     cap = cv.VideoCapture(str(opt.input_path))
+    frame_width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv.CAP_PROP_FPS))
+    fourcc = cv.VideoWriter_fourcc(*'MP4V')
+    output = cv.VideoWriter(str(opt.output_path), fourcc, fps, (frame_width, frame_height))
     num_frame = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+    print(opt.warning_ratio)
     start = timeit.default_timer()
 
     for idx in trange(num_frame, desc='Car Distance Detecting... '):
@@ -72,19 +107,34 @@ def main():
             print("Can't receive frame or stream end. Exiting ...")
             break
         car_det_thread = ThreadWithReturnValue(target=car_detection,
-                                               args=(opt, model, frame))
+                                               args=(opt, model, frame.copy()))
         lane_det_thread = ThreadWithReturnValue(target=process_image, args=(frame,))
         car_det_thread.start()
         lane_det_thread.start()
-        det = car_det_thread.join()
-        lane_det_thread.join()
-        # cv.imshow('frame', frame)
-        # if cv.waitKey(1) == ord('q'):
-        #     break
+        detections = car_det_thread.join()
+        result, left_lane, right_lane = lane_det_thread.join()
+        for det in detections[:, :4]:
+            det = list(map(int, det))
+            if is_in_lane(det, left_lane, right_lane):
+                car_frame_ratio = cal_car_frame_ratio(det, frame.shape)
+                if car_frame_ratio >= opt.warning_ratio:
+                    print('warning')
+                    print(idx)
+                    bbox_color = (0, 0, 255)
+                else:
+                    bbox_color = (255, 0, 0)
+                cv.rectangle(result, det[:2], det[2:], bbox_color, 3)
+                cv.putText(result, f'{car_frame_ratio:.4f}', (det[0], det[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
+                           0.75, bbox_color, 2, cv.LINE_AA)
+        output.write(result)
+        cv.imshow('frame', result)
+        if cv.waitKey(1) == ord('q'):
+            break
 
     stop = timeit.default_timer()
     print('Time: ', stop - start)
     cap.release()
+    output.release()
     cv.destroyAllWindows()
 
 

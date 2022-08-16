@@ -46,48 +46,6 @@ def get_lane_mask(img):
     return mask_lane
 
 
-def process_image(img):
-    gray_image = grayscale(img.copy())
-    # increase gaussian kernel size
-    gaus_blur = gaussian_blur(gray_image, 7)
-    # adjust threshold
-    edges = canny(gaus_blur, 50, 100)
-
-    # Get the masked area of the lane and get the ratio to the original image
-    # If the masked area is greater than 0.85, use the simple mask method
-    imshape = img.shape
-    mask_lane = get_lane_mask(img.copy())
-    mask_ratio = get_mask_ratio(mask_lane)
-    vertices = np.array([[(0, imshape[0] * 5 / 6),  # 左下
-                          (imshape[1] / 2, imshape[0] / 5),  # 中間
-                          (imshape[1] / 2, imshape[0] / 5),  # 中間
-                          (imshape[1], imshape[0] * 5 / 6)]],  # 右下
-                        dtype=np.int32)
-    edge_lane = region_of_interest(edges, vertices)
-    # print(mask_ratio)
-    if mask_ratio < 0.85:
-        edge_lane = cv2.bitwise_and(edge_lane, edge_lane, mask=mask_lane)
-    # print(edge_lane.shape)
-    # # TODO demo1
-    # cv2.imshow('test', edge_lane)
-    # cv2.waitKey(0)
-
-    rho = 1  # 半徑的分辨率
-    theta = np.pi / 180  # 角度分辨率
-    threshold = 20  # 判斷直線點數的臨界值
-    min_line_len = 10  # 線段長度臨界值
-    max_line_gap = imshape[0] / 3  # 線段上最近兩點之間的臨界值
-    line_image = hough_lines(edge_lane, rho, theta, threshold,
-                             min_line_len, max_line_gap)
-
-    # if (check):
-    #     img = draw_text(img)
-
-    result = weighted_img(line_image, img)
-    # result = cv2.bitwise_and(result, result, mask=masked)
-    return result
-
-
 def grayscale(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -149,9 +107,9 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    line_img = draw_lines(line_img, lines)
+    line_img, left_lane_line, right_lane_line = draw_lines(line_img, lines)
 
-    return line_img
+    return line_img, left_lane_line, right_lane_line
 
 
 def get_average_line(lines, default_line):
@@ -220,7 +178,7 @@ def draw_lines(img, lines, thickness=3):
     left_lane_line, right_lane_line = get_complete_lines(left_average_line, right_average_line, img_height, img_width)
     cv2.line(img, left_lane_line[:2], left_lane_line[2:], [0, 255, 0], thickness * 5)
     cv2.line(img, right_lane_line[:2], right_lane_line[2:], [0, 255, 0], thickness * 5)
-    return img
+    return img, left_lane_line, right_lane_line
 
 
 def get_slope(x1, y1, x2, y2):
@@ -290,6 +248,45 @@ def choose_lines(lines, min_slope_thr, max_slope_thr):  # 過濾斜率幾乎為�
     chosen_indices = np.logical_and(min_slope_thr <= abs_slopes, abs_slopes <= max_slope_thr)
     lines = lines[chosen_indices]
     return lines
+
+
+def process_image(img):
+    gray_image = grayscale(img.copy())
+    # increase gaussian kernel size
+    gaus_blur = gaussian_blur(gray_image, 7)
+    # adjust threshold
+    edges = canny(gaus_blur, 50, 100)
+
+    # Get the masked area of the lane and get the ratio to the original image
+    # If the masked area is greater than 0.85, use the simple mask method
+    imshape = img.shape
+    mask_lane = get_lane_mask(img.copy())
+    mask_ratio = get_mask_ratio(mask_lane)
+    vertices = np.array([[(0, imshape[0] * 5 / 6),  # 左下
+                          (imshape[1] / 2, imshape[0] / 5),  # 中間
+                          (imshape[1] / 2, imshape[0] / 5),  # 中間
+                          (imshape[1], imshape[0] * 5 / 6)]],  # 右下
+                        dtype=np.int32)
+    edge_lane = region_of_interest(edges, vertices)
+    # print(mask_ratio)
+    if mask_ratio < 0.85:
+        edge_lane = cv2.bitwise_and(edge_lane, edge_lane, mask=mask_lane)
+    # print(edge_lane.shape)
+    # # TODO demo1
+    # cv2.imshow('test', edge_lane)
+    # cv2.waitKey(0)
+
+    rho = 1  # 半徑的分辨率
+    theta = np.pi / 180  # 角度分辨率
+    threshold = 20  # 判斷直線點數的臨界值
+    min_line_len = 10  # 線段長度臨界值
+    max_line_gap = imshape[0] / 3  # 線段上最近兩點之間的臨界值
+
+    # For Detection
+    line_img, left_lane_line, right_lane_line = hough_lines(edge_lane, rho, theta, threshold,
+                                                            min_line_len, max_line_gap)
+    result = weighted_img(line_img, img)
+    return result, left_lane_line, right_lane_line
 
 
 if __name__ == "__main__":

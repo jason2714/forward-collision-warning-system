@@ -30,11 +30,10 @@ def get_lane_mask(img):
     # mask_brown = cv2.inRange(hsv, *color_dict_HSV['brown'])
     # mask_gray = cv2.bitwise_or(mask_brown, mask_gray)
     mask_lane = cv2.bitwise_or(mask_gray, mask_yellow)
-    # remove noise
+    # remove white noise (Erosion -> Dilation)
     mask_lane = cv2.morphologyEx(mask_lane, cv2.MORPH_OPEN, kernel=np.ones((5, 5), dtype=np.uint8), iterations=6)
-    # close mask
+    # remove black noise (Dilation -> Erosion)
     mask_lane = cv2.morphologyEx(mask_lane, cv2.MORPH_CLOSE, kernel=np.ones((20, 20), dtype=np.uint8))
-    #
     # improve mask by drawing the convexhull
     contours, hierarchy = cv2.findContours(mask_lane, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
@@ -48,34 +47,29 @@ def get_lane_mask(img):
 
 
 def process_image(img):
-    mask_lane = get_lane_mask(img.copy())
-    mask_ratio = get_mask_ratio(mask_lane)
-    # print(mask_ratio)
-    if mask_ratio >= 0.85:
-        img_lane = img.copy()
-    else:
-        img_lane = cv2.bitwise_and(img, img, mask=mask_lane)
-    #
-    # cv2.imshow('test', img_lane)
-    # cv2.waitKey(0)
-
-    gray_image = grayscale(img_lane)
+    gray_image = grayscale(img.copy())
     # increase gaussian kernel size
     gaus_blur = gaussian_blur(gray_image, 7)
     # adjust threshold
     edges = canny(gaus_blur, 50, 100)
-    imshape = img.shape
 
+    # Get the masked area of the lane and get the ratio to the original image
+    # If the masked area is greater than 0.85, use the simple mask method
+    imshape = img.shape
+    mask_lane = get_lane_mask(img.copy())
+    mask_ratio = get_mask_ratio(mask_lane)
     vertices = np.array([[(0, imshape[0] * 5 / 6),  # 左下
                           (imshape[1] / 2, imshape[0] / 5),  # 中間
                           (imshape[1] / 2, imshape[0] / 5),  # 中間
                           (imshape[1], imshape[0] * 5 / 6)]],  # 右下
                         dtype=np.int32)
-    masked = region_of_interest(edges, vertices)
-
-    # print(imshape)
-    # print(vertices)
-    # cv2.imshow('test', masked)
+    edge_lane = region_of_interest(edges, vertices)
+    # print(mask_ratio)
+    if mask_ratio < 0.85:
+        edge_lane = cv2.bitwise_and(edge_lane, edge_lane, mask=mask_lane)
+    # print(edge_lane.shape)
+    # # TODO demo1
+    # cv2.imshow('test', edge_lane)
     # cv2.waitKey(0)
 
     rho = 1  # 半徑的分辨率
@@ -83,7 +77,7 @@ def process_image(img):
     threshold = 20  # 判斷直線點數的臨界值
     min_line_len = 10  # 線段長度臨界值
     max_line_gap = imshape[0] / 3  # 線段上最近兩點之間的臨界值
-    line_image = hough_lines(masked, rho, theta, threshold,
+    line_image = hough_lines(edge_lane, rho, theta, threshold,
                              min_line_len, max_line_gap)
 
     # if (check):
@@ -126,23 +120,34 @@ def region_of_interest(img, vertices):
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
-    global lastLineL, lastLineR
     lines = cv2.HoughLinesP(img,
                             rho,
                             theta,
                             threshold,
                             np.array([]),
                             minLineLength=min_line_len,
-                            maxLineGap=max_line_gap)
+                            maxLineGap=max_line_gap).reshape(-1, 4)
     # self made
     min_slope_thr = 0.3
     max_slope_thr = 3
     if lines is None:
-        # cv2.imshow('Result', img)
-        # cv2.waitKey(0)
         lines = []
     else:
-        lines = choose_lines(lines.reshape(-1, 4), min_slope_thr, max_slope_thr)
+        # # TODO demo2
+        # line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+        # for line in lines:
+        #     cv2.line(line_img, line[:2], line[2:], [0, 255, 255], 3)
+        # cv2.imshow('Result', line_img)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        lines = choose_lines(lines, min_slope_thr, max_slope_thr)
+        # # TODO demo2
+        # line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+        # for line in lines:
+        #     cv2.line(line_img, line[:2], line[2:], [0, 255, 255], 3)
+        # cv2.imshow('123', line_img)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
     line_img = draw_lines(line_img, lines)
 
@@ -150,6 +155,15 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
 
 
 def get_average_line(lines, default_line):
+    """
+    Remove outlier lines and get average left, right line
+    Args:
+        lines: lines from hough_lines
+        default_line: last frame's line
+
+    Returns:
+
+    """
     lines = np.array(lines)
     if not lines.any():
         return default_line, [default_line]
@@ -173,34 +187,39 @@ def get_average_line(lines, default_line):
 def draw_lines(img, lines, thickness=3):
     global last_left_line, last_right_line
     img_height, img_width, _ = img.shape
+
+    # # TODO demo3
+    # test_img = img.copy()
     # for line in lines:
-    #     cv2.line(img, line[:2], line[2:], [0, 255, 255], thickness)
-    # cv2.imshow('Result', img)
+    #     cv2.line(test_img, line[:2], line[2:], [0, 255, 255], thickness)
+    # cv2.imshow('Result', test_img)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-
     slopes = np.array(list(map(lambda x: get_slope(*x), lines)))
+
+    # get left lines
     left_lines = lines[slopes < 0] if np.any(slopes) else []
+    left_average_line, left_lines = get_average_line(left_lines, last_left_line)
+    last_left_line = left_average_line
+    for line in left_lines:
+        cv2.line(img, line[:2], line[2:], [0, 255, 255], thickness)
+
+    # get right lines
     right_lines = lines[slopes > 0] if np.any(slopes) else []
     right_average_line, right_lines = get_average_line(right_lines, last_right_line)
     last_right_line = right_average_line
-    left_average_line, left_lines = get_average_line(left_lines, last_left_line)
-    last_left_line = left_average_line
-    cv2.line(img, right_average_line[:2], right_average_line[2:], [0, 255, 0], thickness)
-    cv2.line(img, left_average_line[:2], left_average_line[2:], [0, 255, 0], thickness)
-
     for line in right_lines:
         cv2.line(img, line[:2], line[2:], [0, 255, 255], thickness)
-    for line in left_lines:
-        cv2.line(img, line[:2], line[2:], [0, 255, 255], thickness)
-    # cv2.line(img_tmp, right_average_line[:2], right_average_line[2:], [0, 255, 0], thickness)
-    # cv2.line(img_tmp, left_average_line[:2], left_average_line[2:], [0, 255, 0], thickness)
+
+    # # TODO demo3
     # cv2.imshow('Result', img)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-    # cv2.imshow('Result tmp', img_tmp)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+
+    # draw lanes
+    left_lane_line, right_lane_line = get_complete_lines(left_average_line, right_average_line, img_height, img_width)
+    cv2.line(img, left_lane_line[:2], left_lane_line[2:], [0, 255, 0], thickness * 5)
+    cv2.line(img, right_lane_line[:2], right_lane_line[2:], [0, 255, 0], thickness * 5)
     return img
 
 
@@ -211,9 +230,34 @@ def get_slope(x1, y1, x2, y2):
         return (y2 - y1) / (x2 - x1)
 
 
-def get_cross_point(x1, y1, x2, y2):
-    m = get_slope(x1, y1, x2, y2)
-    return (720 - y1) / m + x1
+def get_intersection(l1_seg, l2_seg):
+    from sympy import Line
+    l1 = Line(l1_seg[:2], l1_seg[2:])
+    l2 = Line(l2_seg[:2], l2_seg[2:])
+    cross_point = l1.intersection(l2)[0]
+    return list(map(lambda x: int(round(x)), cross_point))
+
+
+def get_complete_lines(left_line_seg, right_line_seg, img_height, img_width):
+    # print(left_line_seg)
+    # print(right_line_seg)
+    # print(img_height, img_width)
+    bottom_line = [0, img_height, img_width, img_height]
+    left_line = [0, 0, 0, img_height]
+    right_line = [img_width, 0, img_width, img_height]
+
+    left_bottom_line = get_intersection(bottom_line, left_line_seg)
+    if left_bottom_line[0] < 0:
+        left_bottom_line = get_intersection(left_line, left_line_seg)
+    right_bottom_line = get_intersection(bottom_line, right_line_seg)
+    if right_bottom_line[0] >= img_width:
+        right_bottom_line = get_intersection(right_line, right_line_seg)
+    lanes_intersection = get_intersection(left_line_seg, right_line_seg)
+
+    left_lane_line = left_bottom_line + lanes_intersection
+    right_lane_line = lanes_intersection + right_bottom_line
+
+    return left_lane_line, right_lane_line
 
 
 def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
@@ -226,13 +270,14 @@ def choose_lines(lines, min_slope_thr, max_slope_thr):  # 過濾斜率幾乎為�
     lines = lines[chosen_indices]
     return lines
 
+
 if __name__ == "__main__":
     input_dir = Path('input')
     output_dir = Path('output')
     # filename = input("請輸入欲辨識的影片檔名: ")
-    file_name = 'test_video1.mp4'
-    input_path = input_dir / file_name
-    output_path = output_dir / file_name
+    filename = 'test_video4.mp4'
+    input_path = input_dir / filename
+    output_path = output_dir / filename
 
     clip = VideoFileClip(str(input_path))
     out_clip = clip.fl_image(process_image)

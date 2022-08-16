@@ -230,12 +230,30 @@ def get_slope(x1, y1, x2, y2):
         return (y2 - y1) / (x2 - x1)
 
 
-def get_intersection(l1_seg, l2_seg):
-    from sympy import Line
-    l1 = Line(l1_seg[:2], l1_seg[2:])
-    l2 = Line(l2_seg[:2], l2_seg[2:])
-    cross_point = l1.intersection(l2)[0]
-    return list(map(lambda x: int(round(x)), cross_point))
+def line_intersection(line1, line2):
+    xdiff = (line1[0] - line1[2], line2[0] - line2[2])
+    ydiff = (line1[1] - line1[3], line2[1] - line2[3])
+
+    def det(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    div = det(xdiff, ydiff)
+    if div == 0:
+        raise Exception('lines do not intersect')
+
+    d = (det(line1[:2], line1[2:]), det(line2[:2], line2[2:]))
+    x = det(d, xdiff) / div
+    y = det(d, ydiff) / div
+    return [round(x), round(y)]
+
+
+# much slower
+# def get_intersection(l1_seg, l2_seg):
+#     from sympy import Line
+#     l1 = Line(l1_seg[:2], l1_seg[2:])
+#     l2 = Line(l2_seg[:2], l2_seg[2:])
+#     cross_point = l1.intersection(l2)[0]
+#     return list(map(lambda x: int(round(x)), cross_point))
 
 
 def get_complete_lines(left_line_seg, right_line_seg, img_height, img_width):
@@ -246,13 +264,16 @@ def get_complete_lines(left_line_seg, right_line_seg, img_height, img_width):
     left_line = [0, 0, 0, img_height]
     right_line = [img_width, 0, img_width, img_height]
 
-    left_bottom_line = get_intersection(bottom_line, left_line_seg)
+    left_bottom_line = line_intersection(bottom_line, left_line_seg)
     if left_bottom_line[0] < 0:
-        left_bottom_line = get_intersection(left_line, left_line_seg)
-    right_bottom_line = get_intersection(bottom_line, right_line_seg)
+        left_bottom_line = line_intersection(left_line, left_line_seg)
+
+    right_bottom_line = line_intersection(bottom_line, right_line_seg)
     if right_bottom_line[0] >= img_width:
-        right_bottom_line = get_intersection(right_line, right_line_seg)
-    lanes_intersection = get_intersection(left_line_seg, right_line_seg)
+        right_bottom_line = line_intersection(right_line, right_line_seg)
+
+    lanes_intersection = line_intersection(left_line_seg, right_line_seg)
+    # assert (old_lanes_intersection == lanes_intersection), 'not equal'
 
     left_lane_line = left_bottom_line + lanes_intersection
     right_lane_line = lanes_intersection + right_bottom_line
@@ -272,7 +293,7 @@ def choose_lines(lines, min_slope_thr, max_slope_thr):  # 過濾斜率幾乎為�
 
 
 if __name__ == "__main__":
-    input_dir = Path('input')
+    input_dir = Path('data/videos')
     output_dir = Path('output')
     # filename = input("請輸入欲辨識的影片檔名: ")
     filename = 'test_video4.mp4'

@@ -25,6 +25,7 @@ seaborn>=0.11.0
 # Lane Detection ------------------------------------
 opencv-python
 moviepy
+sympy
 
 # Export --------------------------------------
 # coremltools>=4.1  # CoreML export

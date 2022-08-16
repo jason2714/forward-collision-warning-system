@@ -8,7 +8,7 @@ from utils.torch_utils import select_device
 from lane_crop import process_image
 from thread_with_return_value import ThreadWithReturnValue
 import timeit
-
+from tqdm import trange
 
 def parse_opt():
     parser = ArgumentParser()
@@ -60,9 +60,12 @@ def main():
     opt = parse_opt()
     model = DetectMultiBackend(opt.weights, device=opt.device, dnn=opt.dnn, data=opt.data, fp16=opt.half)
     cap = cv.VideoCapture(str(opt.input_path))
+    num_frame = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
     start = timeit.default_timer()
 
-    while cap.isOpened():
+    for idx in trange(num_frame, desc='Car Distance Detecting... '):
+        if not cap.isOpened():
+            break
         ret, frame = cap.read()
         # if frame is read correctly ret is True
         if not ret:

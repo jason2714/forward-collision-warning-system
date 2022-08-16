@@ -113,13 +113,15 @@ def main():
         lane_det_thread.start()
         detections = car_det_thread.join()
         result, left_lane, right_lane = lane_det_thread.join()
-        for det in detections[:, :4]:
+        if detections is None:
+            detections = []
+        for det in detections:
+            det, conf, cls = det[:4].copy(), det[4], det[5]
             det = list(map(int, det))
             if is_in_lane(det, left_lane, right_lane):
                 car_frame_ratio = cal_car_frame_ratio(det, frame.shape)
                 if car_frame_ratio >= opt.warning_ratio:
-                    print('warning')
-                    print(idx)
+                    # print(idx, 'warning', conf)
                     bbox_color = (0, 0, 255)
                 else:
                     bbox_color = (255, 0, 0)
@@ -127,9 +129,9 @@ def main():
                 cv.putText(result, f'{car_frame_ratio:.4f}', (det[0], det[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
                            0.75, bbox_color, 2, cv.LINE_AA)
         output.write(result)
-        cv.imshow('frame', result)
-        if cv.waitKey(1) == ord('q'):
-            break
+        # cv.imshow('frame', result)
+        # if cv.waitKey(1) == ord('q'):
+        #     break
 
     stop = timeit.default_timer()
     print('Time: ', stop - start)

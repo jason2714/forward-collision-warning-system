@@ -5,4 +5,4 @@ python detect.py --weights yolov5x.pt --source data\videos\test_video1.mp4 --dev
 
 python collision_detection.py --weights yolov5m6.pt --input_path data\videos\test_video1.mp4 --device 0 --classes 2 3 4 5 6 7 --conf-thres 0.6 --name car_detection --exist-ok
 
-python collision_detection.py --weights yolov5s6.pt --input_path data\videos\test_video1.mp4 --device 0 --classes 2 3 4 5 6 7 --conf-thres 0.6 --name car_detection --exist-ok
+python collision_detection.py --weights yolov5s6.pt --input_path data\videos\test_video1.mp4 --device 0 --classes 2 3 4 5 6 7 --conf-thres 0.7 --name car_detection --exist-ok

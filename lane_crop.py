@@ -84,13 +84,14 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
                             threshold,
                             np.array([]),
                             minLineLength=min_line_len,
-                            maxLineGap=max_line_gap).reshape(-1, 4)
+                            maxLineGap=max_line_gap)
     # self made
     min_slope_thr = 0.3
     max_slope_thr = 3
     if lines is None:
         lines = []
     else:
+        lines = lines.reshape(-1, 4)
         # # TODO demo2
         # line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
         # for line in lines:
@@ -239,7 +240,7 @@ def get_complete_lines(left_line_seg, right_line_seg, img_height, img_width):
     return left_lane_line, right_lane_line
 
 
-def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
+def weighted_img(img, initial_img, α=0.8, β=0.5, γ=0.):
     return cv2.addWeighted(initial_img, α, img, β, γ)
 
 

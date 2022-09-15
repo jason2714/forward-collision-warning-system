@@ -262,6 +262,11 @@ def process_image(img):
     # If the masked area is greater than 0.85, use the simple mask method
     imshape = img.shape
     mask_lane = get_lane_mask(img.copy())
+    # TODO demo0
+    mask_img = cv2.bitwise_and(img, img, mask=mask_lane)[:, :, ::-1]
+    cv2.imshow('test', mask_img)
+    cv2.waitKey(0)
+    
     mask_ratio = get_mask_ratio(mask_lane)
     vertices = np.array([[(0, imshape[0] * 5 / 6),  # 左下
                           (imshape[1] / 2, imshape[0] / 5),  # 中間
@@ -287,6 +292,9 @@ def process_image(img):
     line_img, left_lane_line, right_lane_line = hough_lines(edge_lane, rho, theta, threshold,
                                                             min_line_len, max_line_gap)
     result = weighted_img(line_img, img)
+    
+    # # TODO for demo
+    # return result
     return result, left_lane_line, right_lane_line
 
 
@@ -294,7 +302,7 @@ if __name__ == "__main__":
     input_dir = Path('data/videos')
     output_dir = Path('output')
     # filename = input("請輸入欲辨識的影片檔名: ")
-    filename = 'test_video4.mp4'
+    filename = 'test_video1.mp4'
     input_path = input_dir / filename
     output_path = output_dir / filename
 

@@ -16,7 +16,7 @@ def parse_opt():
 
     parser.add_argument('--input_path', type=Path, default='./data/videos/test_video1.mp4', help='path of input video')
     parser.add_argument('--output_dir', type=Path, default='./output/', help='directory of output video')
-    parser.add_argument('--warning_ratio', type=float, default=1 / 36,
+    parser.add_argument('--warning_ratio', type=float, default=1 / 25,
                         help='warning ratio of the car size in the frame')
 
     # options for yolo

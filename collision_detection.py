@@ -98,6 +98,8 @@ def main():
     print(opt.warning_ratio)
     start = timeit.default_timer()
 
+    last_detections = []
+    last_count = 5
     for idx in trange(num_frame, desc='Car Distance Detecting... '):
         if not cap.isOpened():
             break
@@ -112,22 +114,34 @@ def main():
         car_det_thread.start()
         lane_det_thread.start()
         detections = car_det_thread.join()
-        result, left_lane, right_lane = lane_det_thread.join()
         if detections is None:
             detections = []
+        result, left_lane, right_lane = lane_det_thread.join()
+        detections_in_lane = []
         for det in detections:
             det, conf, cls = det[:4].copy(), det[4], det[5]
             det = list(map(int, det))
             if is_in_lane(det, left_lane, right_lane):
-                car_frame_ratio = cal_car_frame_ratio(det, frame.shape)
-                if car_frame_ratio >= opt.warning_ratio:
-                    # print(idx, 'warning', conf)
-                    bbox_color = (0, 0, 255)
-                else:
-                    bbox_color = (255, 0, 0)
-                cv.rectangle(result, det[:2], det[2:], bbox_color, 3)
-                cv.putText(result, f'{car_frame_ratio:.4f}', (det[0], det[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
-                           0.75, bbox_color, 2, cv.LINE_AA)
+                detections_in_lane.append(det)
+        if not detections_in_lane:
+            last_count -= 1
+            if last_count > 0:
+                detections_in_lane = last_detections
+        else:
+            last_count = 5
+            last_detections = detections_in_lane
+        for det in detections_in_lane:
+            car_frame_ratio = cal_car_frame_ratio(det, frame.shape)
+            if car_frame_ratio >= opt.warning_ratio:
+                # print(idx, 'warning', conf)
+                bbox_color = (0, 0, 255)
+                cv.putText(result, 'WARNING', (det[0], det[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
+                           1.5, bbox_color, 5, cv.LINE_AA)
+            else:
+                bbox_color = (255, 0, 0)
+                # cv.putText(result, f'{car_frame_ratio:.4f}', (det[0], det[1] - 10), cv.FONT_HERSHEY_SIMPLEX,
+                #            0.75, bbox_color, 2, cv.LINE_AA)
+            cv.rectangle(result, det[:2], det[2:], bbox_color, 3)
         output.write(result)
         # cv.imshow('frame', result)
         # if cv.waitKey(1) == ord('q'):

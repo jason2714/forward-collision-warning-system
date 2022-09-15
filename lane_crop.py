@@ -262,10 +262,10 @@ def process_image(img):
     # If the masked area is greater than 0.85, use the simple mask method
     imshape = img.shape
     mask_lane = get_lane_mask(img.copy())
-    # TODO demo0
-    mask_img = cv2.bitwise_and(img, img, mask=mask_lane)[:, :, ::-1]
-    cv2.imshow('test', mask_img)
-    cv2.waitKey(0)
+    # # TODO demo0
+    # mask_img = cv2.bitwise_and(img, img, mask=mask_lane)[:, :, ::-1]
+    # cv2.imshow('test', mask_img)
+    # cv2.waitKey(0)
     
     mask_ratio = get_mask_ratio(mask_lane)
     vertices = np.array([[(0, imshape[0] * 5 / 6),  # 左下
